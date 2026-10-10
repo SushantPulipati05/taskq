@@ -69,7 +69,7 @@ func (p *Pool) Run(ctx context.Context) {
 			p.loop(ctx, workerID)
 		}()
 	}
-		// One reaper per process. If several worker processes run, each has a reaper;
+	// One reaper per process. If several worker processes run, each has a reaper;
 	// that's safe because the reap UPDATE is atomic, so a job is reclaimed once.
 	wg.Add(1)
 	go func() {
@@ -174,9 +174,9 @@ func (p *Pool) runHandler(ctx context.Context, job *queue.Job) (err error) {
 	}
 
 	// The handler's context ignores shutdown (WithoutCancel): on Ctrl+C we let the
-// current job finish instead of aborting it halfway and wasting an attempt.
-// It is still limited to one lease, after which another worker may reclaim the job.
-    hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), p.cfg.Lease)
+	// current job finish instead of aborting it halfway and wasting an attempt.
+	// It is still limited to one lease, after which another worker may reclaim the job.
+	hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), p.cfg.Lease)
 	defer cancel()
 
 	defer func() {

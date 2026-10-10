@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"os"
-	"time"
 	"os/signal"
-    "syscall"
+	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -23,9 +23,9 @@ const shutdownTimeout = 40 * time.Second
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	// ctx is cancelled when the process receives Ctrl+C (os.Interrupt) or SIGTERM,
-    // the signal Docker and Kubernetes send when they stop a container.
-    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-    defer stop()
+	// the signal Docker and Kubernetes send when they stop a container.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -58,32 +58,32 @@ func main() {
 	workers.Handle("email", sendEmail)
 	workers.Handle("urgent-email", sendEmail)
 
-    logger.Info("starting workers", "queue", "default", "concurrency", 4)
-    
-    // Run the pool in the background so main can watch for the shutdown signal.
-    done := make(chan struct{})
-    go func() {
-    	workers.Run(ctx) // returns once every worker has stopped
-    	close(done)
-    }()
-    
-    <-ctx.Done() // block here until Ctrl+C / SIGTERM
-    logger.Info("shutdown signal received; finishing in-flight jobs", "timeout", shutdownTimeout)
-    
-    // Restore normal Ctrl+C behaviour: pressing it a second time kills the process
-    // immediately, in case you don't want to wait.
-    stop()
-    
-    select {
-    case <-done:
-    	logger.Info("all workers stopped cleanly")
-    case <-time.After(shutdownTimeout):
-    	// Some job is taking too long. Exit anyway; its lease will expire and the
-    	// reaper (Step 6) will put it back in the queue.
-    	logger.Warn("timed out waiting for workers; exiting")
-    	os.Exit(1)
-    } // blocks; Ctrl+C kills the process for now (graceful shutdown is Step 5)
-    }
+	logger.Info("starting workers", "queue", "default", "concurrency", 4)
+
+	// Run the pool in the background so main can watch for the shutdown signal.
+	done := make(chan struct{})
+	go func() {
+		workers.Run(ctx) // returns once every worker has stopped
+		close(done)
+	}()
+
+	<-ctx.Done() // block here until Ctrl+C / SIGTERM
+	logger.Info("shutdown signal received; finishing in-flight jobs", "timeout", shutdownTimeout)
+
+	// Restore normal Ctrl+C behaviour: pressing it a second time kills the process
+	// immediately, in case you don't want to wait.
+	stop()
+
+	select {
+	case <-done:
+		logger.Info("all workers stopped cleanly")
+	case <-time.After(shutdownTimeout):
+		// Some job is taking too long. Exit anyway; its lease will expire and the
+		// reaper (Step 6) will put it back in the queue.
+		logger.Warn("timed out waiting for workers; exiting")
+		os.Exit(1)
+	} // blocks; Ctrl+C kills the process for now (graceful shutdown is Step 5)
+}
 
 // emailPayload is what an "email" job carries in its payload column.
 type emailPayload struct {

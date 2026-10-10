@@ -89,7 +89,7 @@ WHERE  id = $1
   AND  locked_by = $2
   AND  status = 'running'`
 
-  // reapSQL returns jobs whose lease expired to the queue. An expired lease means the
+// reapSQL returns jobs whose lease expired to the queue. An expired lease means the
 // worker crashed or hung, so the attempt counts as used: a job that keeps crashing
 // its worker eventually goes to 'dead' instead of crashing workers forever.
 const reapSQL = `
