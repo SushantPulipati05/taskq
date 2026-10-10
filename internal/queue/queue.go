@@ -11,6 +11,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ErrLeaseLost means the worker no longer holds the job: its lease expired and the
+// job was reclaimed, or it was already finished. The worker must not treat its
+// result as recorded.
+var ErrLeaseLost = errors.New("lease lost")
+
+// Job is a claimed job, as returned by Claim.
 type Job struct {
 	ID          int64
 	Queue       string
@@ -22,17 +28,18 @@ type Job struct {
 	LockedUntil time.Time
 }
 
+// Queue runs job-queue operations against Postgres.
 type Queue struct {
-    pool *pgxpool.Pool
+	pool *pgxpool.Pool
 }
 
-func New(pool *pgxpool.Pool) *Queue { 
-	return &Queue{
-		pool: pool,
-	}
- }
+// New returns a Queue that uses the given connection pool.
+func New(pool *pgxpool.Pool) *Queue {
+	return &Queue{pool: pool}
+}
 
- const claimSQL = `UPDATE jobs
+const claimSQL = `
+UPDATE jobs
 SET    status       = 'running',
        locked_by    = $2,
        locked_until = now() + make_interval(secs => $3),
@@ -48,8 +55,42 @@ WHERE  id = (
     LIMIT  1
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, queue, kind, payload, priority, attempts, max_attempts, locked_until;`
+RETURNING id, queue, kind, payload, priority, attempts, max_attempts, locked_until`
 
+const completeSQL = `
+UPDATE jobs
+SET    status       = 'done',
+       locked_by    = NULL,
+       locked_until = NULL,
+       updated_at   = now()
+WHERE  id = $1
+  AND  locked_by = $2
+  AND  status = 'running'`
+
+// failSQL records a failed attempt. If attempts are used up the job goes to 'dead';
+// otherwise it goes back to 'queued' with run_at pushed out by 2^attempts seconds
+// (2s, 4s, 8s, ...). Claim already incremented attempts, so attempts here is
+// "how many tries have happened so far".
+const failSQL = `
+UPDATE jobs
+SET    status = CASE
+                    WHEN attempts >= max_attempts THEN 'dead'
+                    ELSE 'queued'
+                END,
+       run_at = CASE
+                    WHEN attempts >= max_attempts THEN run_at
+                    ELSE now() + make_interval(secs => power(2, attempts))
+                END,
+       last_error   = $3,
+       locked_by    = NULL,
+       locked_until = NULL,
+       updated_at   = now()
+WHERE  id = $1
+  AND  locked_by = $2
+  AND  status = 'running'`
+
+// Claim atomically takes the next runnable job from the given queue and leases it
+// to workerID for the lease duration. It returns (nil, nil) when no job is available.
 func (q *Queue) Claim(ctx context.Context, queue, workerID string, lease time.Duration) (*Job, error) {
 	var j Job
 	err := q.pool.QueryRow(ctx, claimSQL, queue, workerID, lease.Seconds()).Scan(
@@ -69,4 +110,36 @@ func (q *Queue) Claim(ctx context.Context, queue, workerID string, lease time.Du
 		return nil, fmt.Errorf("claim job: %w", err)
 	}
 	return &j, nil
+}
+
+// Complete marks a job done, but only if workerID still holds its lease.
+// It returns ErrLeaseLost (wrapped) if the worker no longer owns the job.
+func (q *Queue) Complete(ctx context.Context, jobID int64, workerID string) error {
+	tag, err := q.pool.Exec(ctx, completeSQL, jobID, workerID)
+	if err != nil {
+		return fmt.Errorf("complete job %d: %w", jobID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("complete job %d: %w", jobID, ErrLeaseLost)
+	}
+	return nil
+}
+
+// Fail records a failed attempt for a job workerID holds. The job is retried later
+// with exponential backoff, or marked dead once max_attempts is reached.
+// It returns ErrLeaseLost (wrapped) if the worker no longer owns the job.
+func (q *Queue) Fail(ctx context.Context, jobID int64, workerID string, jobErr error) error {
+	msg := "unknown error"
+	if jobErr != nil {
+		msg = jobErr.Error()
+	}
+
+	tag, err := q.pool.Exec(ctx, failSQL, jobID, workerID, msg)
+	if err != nil {
+		return fmt.Errorf("fail job %d: %w", jobID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("fail job %d: %w", jobID, ErrLeaseLost)
+	}
+	return nil
 }

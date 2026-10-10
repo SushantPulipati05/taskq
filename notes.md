@@ -8,3 +8,4 @@ seeded the jobs table with dummy jobs and ran two servers concurrently each requ
 - the done/dead jobs are added to the table with partial indexing so that postgres doesn't need to go through every job only the queued once, with normal index
 - the select command is all single line instead of multiple steps to avoid the gap created between running two separate might cause another worker to sweep in and take the job(the first step checks for the job, the lock is not established until the second step)
 - what Isolation actually promises. It means transactions don’t see each other’s uncommitted changes, and conflicting writes are handled safely. It doesn’t stop two transactions from reading the same committed row. Postgres uses MVCC: a plain SELECT reads a snapshot and takes no row lock (“readers don’t block writers, writers don’t block readers”).
+
