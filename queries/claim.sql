@@ -33,7 +33,3 @@ WHERE  id = (
 )
 RETURNING id, queue, kind, payload, priority, attempts, max_attempts, locked_until;
 
-
-hij
-
-njk
