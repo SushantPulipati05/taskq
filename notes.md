@@ -9,3 +9,7 @@ seeded the jobs table with dummy jobs and ran two servers concurrently each requ
 - the select command is all single line instead of multiple steps to avoid the gap created between running two separate might cause another worker to sweep in and take the job(the first step checks for the job, the lock is not established until the second step)
 - what Isolation actually promises. It means transactions don’t see each other’s uncommitted changes, and conflicting writes are handled safely. It doesn’t stop two transactions from reading the same committed row. Postgres uses MVCC: a plain SELECT reads a snapshot and takes no row lock (“readers don’t block writers, writers don’t block readers”).
 
+
+- multiple go routines can, work on the jobs simultaneously now, the worker(go routine) that takes up the first job is completely dependent on the who reaches the session first, it's almost random
+- after each failure of completion of the job, the job is kind of locked, its backoff for 2seconds during this time no worker can accept that job, even if the job queue is empty, it can only be accepted after the buffer timer
+- This took a lot of time to understand and implement, the code wasn't that complex, but the understanding part took some time, its kinda easy once you understand
