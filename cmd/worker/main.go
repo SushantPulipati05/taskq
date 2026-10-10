@@ -52,6 +52,7 @@ func main() {
 		Concurrency:  4,
 		Lease:        30 * time.Second,
 		PollInterval: time.Second,
+		ReapInterval: 10 * time.Second,
 	}, logger)
 
 	workers.Handle("email", sendEmail)

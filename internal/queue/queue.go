@@ -89,6 +89,23 @@ WHERE  id = $1
   AND  locked_by = $2
   AND  status = 'running'`
 
+  // reapSQL returns jobs whose lease expired to the queue. An expired lease means the
+// worker crashed or hung, so the attempt counts as used: a job that keeps crashing
+// its worker eventually goes to 'dead' instead of crashing workers forever.
+const reapSQL = `
+UPDATE jobs
+SET    status = CASE
+                    WHEN attempts >= max_attempts THEN 'dead'
+                    ELSE 'queued'
+                END,
+       run_at       = now(),
+       last_error   = 'lease expired: worker ' || locked_by || ' stopped responding',
+       locked_by    = NULL,
+       locked_until = NULL,
+       updated_at   = now()
+WHERE  status = 'running'
+  AND  locked_until < now()`
+
 // Claim atomically takes the next runnable job from the given queue and leases it
 // to workerID for the lease duration. It returns (nil, nil) when no job is available.
 func (q *Queue) Claim(ctx context.Context, queue, workerID string, lease time.Duration) (*Job, error) {
@@ -142,4 +159,14 @@ func (q *Queue) Fail(ctx context.Context, jobID int64, workerID string, jobErr e
 		return fmt.Errorf("fail job %d: %w", jobID, ErrLeaseLost)
 	}
 	return nil
+}
+
+// Reap returns jobs whose lease has expired back to the queue (or to dead, if their
+// attempts are used up). It returns how many jobs were reclaimed.
+func (q *Queue) Reap(ctx context.Context) (int64, error) {
+	tag, err := q.pool.Exec(ctx, reapSQL)
+	if err != nil {
+		return 0, fmt.Errorf("reap expired leases: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

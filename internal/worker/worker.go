@@ -25,6 +25,7 @@ type Config struct {
 	Concurrency  int           // number of worker goroutines
 	Lease        time.Duration // how long a claim is valid; also the handler timeout
 	PollInterval time.Duration // how long to wait when the queue is empty
+	ReapInterval time.Duration // how often to reclaim jobs with expired leases (0 = off)
 }
 
 // Pool is a set of workers sharing one queue and one set of handlers.
@@ -68,7 +69,42 @@ func (p *Pool) Run(ctx context.Context) {
 			p.loop(ctx, workerID)
 		}()
 	}
+		// One reaper per process. If several worker processes run, each has a reaper;
+	// that's safe because the reap UPDATE is atomic, so a job is reclaimed once.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.reapLoop(ctx)
+	}()
 	wg.Wait()
+}
+
+// reapLoop periodically returns jobs whose lease expired (their worker crashed or
+// hung) to the queue, until ctx is cancelled.
+func (p *Pool) reapLoop(ctx context.Context) {
+	if p.cfg.ReapInterval <= 0 {
+		return
+	}
+	log := p.log.With("component", "reaper")
+
+	for {
+		sleep(ctx, p.cfg.ReapInterval)
+		if ctx.Err() != nil {
+			return
+		}
+
+		n, err := p.q.Reap(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			log.Error("reap failed", "err", err)
+			continue
+		}
+		if n > 0 {
+			log.Warn("reclaimed jobs with expired leases", "count", n)
+		}
+	}
 }
 
 // loop is one worker: claim, process, repeat, until ctx is cancelled.

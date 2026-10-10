@@ -17,3 +17,6 @@ seeded the jobs table with dummy jobs and ran two servers concurrently each requ
 - the loop here uses ctx which listens when a ctrl c is pressed, so that the workers stop taking new jobs, the handler doesn't so that the jobs are finished before the session is terminate
 - this is was necessary because terminating mid session caused job to stopped in the middle and getting marked as a failure, this was wastage of one good attempt and also when the job is sensitive and crucial this is not a  good 
 - the shutdown timer is longer than the lease so that all the jobs finish before termination
+
+- the queue here ensures that the job is done atleast once, but sometimes it runs more than once. Getting exactly one is practically impossible because there can be a slow worker or any other problem
+- the reaper action is also counted as an attempt in the job. it is to save system from a poison job, basically a job that can kill other workers, one downside is that the workers that had a genuine problem also lose an attempt but they have been given enough head room to deal with it
