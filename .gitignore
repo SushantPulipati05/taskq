@@ -1,0 +1,20 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Build output
+/bin/
+/taskq
+*.exe
+
+# Test and profiling output
+*.out
+coverage.html
+*.prof
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

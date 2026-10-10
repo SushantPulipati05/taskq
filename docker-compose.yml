@@ -1,0 +1,19 @@
+services:
+  db:                       # service name; you'll use it in `docker compose exec db ...`
+    image: postgres:16            # which image and tag
+    environment:
+      POSTGRES_USER: taskq
+      POSTGRES_PASSWORD: taskq123
+      POSTGRES_DB: taskqdb
+    ports:
+      - "5433:5432"           # host:container
+    volumes:
+      - taskq_pgdata:/var/lib/postgresql/data             # volume name : path inside the container
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskq -d taskqdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  taskq_pgdata:                      # declare the named volume here (an empty value is fine)
