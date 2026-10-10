@@ -13,3 +13,7 @@ seeded the jobs table with dummy jobs and ran two servers concurrently each requ
 - multiple go routines can, work on the jobs simultaneously now, the worker(go routine) that takes up the first job is completely dependent on the who reaches the session first, it's almost random
 - after each failure of completion of the job, the job is kind of locked, its backoff for 2seconds during this time no worker can accept that job, even if the job queue is empty, it can only be accepted after the buffer timer
 - This took a lot of time to understand and implement, the code wasn't that complex, but the understanding part took some time, its kinda easy once you understand
+
+- the loop here uses ctx which listens when a ctrl c is pressed, so that the workers stop taking new jobs, the handler doesn't so that the jobs are finished before the session is terminate
+- this is was necessary because terminating mid session caused job to stopped in the middle and getting marked as a failure, this was wastage of one good attempt and also when the job is sensitive and crucial this is not a  good 
+- the shutdown timer is longer than the lease so that all the jobs finish before termination

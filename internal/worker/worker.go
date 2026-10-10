@@ -137,9 +137,10 @@ func (p *Pool) runHandler(ctx context.Context, job *queue.Job) (err error) {
 		return fmt.Errorf("no handler registered for kind %q", job.Kind)
 	}
 
-	// The handler gets at most one lease of time. After that another worker may
-	// legally reclaim the job, so continuing would mean running it twice.
-	hctx, cancel := context.WithTimeout(ctx, p.cfg.Lease)
+	// The handler's context ignores shutdown (WithoutCancel): on Ctrl+C we let the
+// current job finish instead of aborting it halfway and wasting an attempt.
+// It is still limited to one lease, after which another worker may reclaim the job.
+    hctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), p.cfg.Lease)
 	defer cancel()
 
 	defer func() {
