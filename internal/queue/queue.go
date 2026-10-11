@@ -170,3 +170,19 @@ func (q *Queue) Reap(ctx context.Context) (int64, error) {
 	}
 	return tag.RowsAffected(), nil
 }
+
+// depthSQL counts waiting and running jobs. Each subquery filters on exactly the
+// condition of one partial index (jobs_claim_idx / jobs_reap_idx), so Postgres can
+// count from those small indexes instead of scanning the whole table.
+const depthSQL = `
+SELECT (SELECT count(*) FROM jobs WHERE status = 'queued')  AS queued,
+       (SELECT count(*) FROM jobs WHERE status = 'running') AS running`
+
+// Depth returns how many jobs are queued and running right now.
+func (q *Queue) Depth(ctx context.Context) (queued, running int64, err error) {
+	err = q.pool.QueryRow(ctx, depthSQL).Scan(&queued, &running)
+	if err != nil {
+		return 0, 0, fmt.Errorf("queue depth: %w", err)
+	}
+	return queued, running, nil
+}

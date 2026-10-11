@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s   # fetch /metrics every 5 seconds
+
+scrape_configs:
+  - job_name: taskq-worker
+    static_configs:
+      # The worker runs on your PC, outside Docker. host.docker.internal is how a
+      # container reaches the host machine.
+      - targets: ["host.docker.internal:2112"]
+
+      

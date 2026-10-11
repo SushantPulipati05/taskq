@@ -20,3 +20,5 @@ seeded the jobs table with dummy jobs and ran two servers concurrently each requ
 
 - the queue here ensures that the job is done atleast once, but sometimes it runs more than once. Getting exactly one is practically impossible because there can be a slow worker or any other problem
 - the reaper action is also counted as an attempt in the job. it is to save system from a poison job, basically a job that can kill other workers, one downside is that the workers that had a genuine problem also lose an attempt but they have been given enough head room to deal with it
+
+- using p99 for the average job duration because having the normal median doesn't seem fair, slow outliers distort the average, which is why it’s a poor summary. The median is resistant to outliers and tells you the typical case. p99 deliberately focuses on the slow outliers, because those are what users feel and what breaks things

@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/signal"
+	"net/http"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 
 	"github.com/SushantPulipati05/taskq/internal/queue"
 	"github.com/SushantPulipati05/taskq/internal/worker"
+		"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const shutdownTimeout = 40 * time.Second
@@ -53,10 +55,27 @@ func main() {
 		Lease:        30 * time.Second,
 		PollInterval: time.Second,
 		ReapInterval: 10 * time.Second,
+		DepthInterval: 5 * time.Second,
 	}, logger)
 
 	workers.Handle("email", sendEmail)
 	workers.Handle("urgent-email", sendEmail)
+
+		// Serve Prometheus metrics. ":2112" listens on all interfaces so the Prometheus
+	// container can reach it via host.docker.internal.
+	metricsAddr := os.Getenv("METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":2112"
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	metricsSrv := &http.Server{Addr: metricsAddr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() {
+		if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("metrics server", "err", err)
+		}
+	}()
+	logger.Info("serving metrics", "addr", metricsAddr, "path", "/metrics")
 
 	logger.Info("starting workers", "queue", "default", "concurrency", 4)
 
@@ -75,8 +94,16 @@ func main() {
 	stop()
 
 	select {
-	case <-done:
+		case <-done:
 		logger.Info("all workers stopped cleanly")
+
+		// Workers are done; stop the metrics server too (wait up to 5s for any
+		// in-progress scrape to finish).
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := metricsSrv.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("metrics server shutdown", "err", err)
+		}
 	case <-time.After(shutdownTimeout):
 		// Some job is taking too long. Exit anyway; its lease will expire and the
 		// reaper (Step 6) will put it back in the queue.
