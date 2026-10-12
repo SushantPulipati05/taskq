@@ -239,3 +239,33 @@ Time: 0.298 ms
  Planning Time: 4.988 ms
  Execution Time: 306.497 ms
 (19 rows)
+
+
+
+
+
+
+
+
+when postgres synchronous is on 
+workers      jobs       seconds      jobs/sec    
+1            20000      113.99       175         
+4            20000      19.79        1011        
+8            20000      11.14        1796        
+16           20000      7.90         2533        
+32           20000      4.56         4383        
+
+when postgres synchronous is switched off 
+workers      jobs       seconds      jobs/sec    
+1            20000      21.70        921         
+4            20000      5.70         3511        
+8            20000      3.83         5216        
+16           20000      2.88         6947        
+
+
+worker 1 is almost 5 times faster with synchronous switched off this means that worker one does 175 jobs/sec, so about 5.7 ms per job. Each job is 2 commits, so about 2.9 ms per commit and worker 1 with Sync off: 921 jobs/sec, so about 1.1 ms per job. So of the 5.7 ms each job took, about 4.6 ms (around 80%) was just waiting for the disk flush. The query itself, the network round trips and your Go code together took only about 1.1 ms.
+Its taking so much time to flush the disk because postgres is running inside Docker Desktop, which on Windows is running inside a small Linux virtual machine (WSL2). Every flush has to pass through that virtual machine’s virtual disk down to my real SSD, which adds a few milliseconds each time. On a Linux server with a fast disk, that flush might take 0.1–0.5 ms.
+the trade off with sync-off is the durability, in case of a crash, we might lose the commits made in the last fraction of second and the jobs done might revert back
+
+
+also keep adding more workers just doesn't keep on reducing the time exponentially, it actually flattens the curve. this is because the bottleneck effect that happens when there is only one place the commits happen, so the worker get keep queued behind one other waiting to process their query to the single db
