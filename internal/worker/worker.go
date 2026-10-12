@@ -21,11 +21,11 @@ type Handler func(ctx context.Context, job *queue.Job) error
 
 // Config controls how the pool claims and runs jobs.
 type Config struct {
-	Queue        string        // which queue to claim from
-	Concurrency  int           // number of worker goroutines
-	Lease        time.Duration // how long a claim is valid; also the handler timeout
-	PollInterval time.Duration // how long to wait when the queue is empty
-	ReapInterval time.Duration // how often to reclaim jobs with expired leases (0 = off)
+	Queue         string        // which queue to claim from
+	Concurrency   int           // number of worker goroutines
+	Lease         time.Duration // how long a claim is valid; also the handler timeout
+	PollInterval  time.Duration // how long to wait when the queue is empty
+	ReapInterval  time.Duration // how often to reclaim jobs with expired leases (0 = off)
 	DepthInterval time.Duration // how often to sample queue depth for metrics (0 = off)
 }
 
@@ -71,7 +71,7 @@ func (p *Pool) Run(ctx context.Context) {
 		}()
 	}
 
-		// One goroutine samples queue depth for the taskq_queue_depth gauge.
+	// One goroutine samples queue depth for the taskq_queue_depth gauge.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -110,7 +110,7 @@ func (p *Pool) reapLoop(ctx context.Context) {
 			log.Error("reap failed", "err", err)
 			continue
 		}
-				if n > 0 {
+		if n > 0 {
 			jobsReaped.Add(float64(n))
 			log.Warn("reclaimed jobs with expired leases", "count", n)
 		}
@@ -153,7 +153,7 @@ func (p *Pool) loop(ctx context.Context, workerID string) {
 			return
 		}
 
-				claimStart := time.Now()
+		claimStart := time.Now()
 		job, err := p.q.Claim(ctx, p.cfg.Queue, workerID, p.cfg.Lease)
 		claimDuration.WithLabelValues(claimResult(job, err)).Observe(time.Since(claimStart).Seconds())
 
@@ -180,7 +180,7 @@ func (p *Pool) process(ctx context.Context, log *slog.Logger, workerID string, j
 	start := time.Now()
 
 	jobErr := p.runHandler(ctx, job)
-		jobDuration.WithLabelValues(job.Kind).Observe(time.Since(start).Seconds())
+	jobDuration.WithLabelValues(job.Kind).Observe(time.Since(start).Seconds())
 
 	// Record the outcome with a context that is NOT cancelled when ctx is, so a job
 	// that finished just as we were shutting down still gets marked done/failed.
@@ -189,7 +189,7 @@ func (p *Pool) process(ctx context.Context, log *slog.Logger, workerID string, j
 	defer cancel()
 
 	if jobErr == nil {
-				if err := p.q.Complete(recordCtx, job.ID, workerID); err != nil {
+		if err := p.q.Complete(recordCtx, job.ID, workerID); err != nil {
 			jobsProcessed.WithLabelValues(job.Kind, recordErrOutcome(err)).Inc()
 			logRecordErr(log, "complete", err)
 			return
@@ -199,7 +199,7 @@ func (p *Pool) process(ctx context.Context, log *slog.Logger, workerID string, j
 		return
 	}
 
-		if err := p.q.Fail(recordCtx, job.ID, workerID, jobErr); err != nil {
+	if err := p.q.Fail(recordCtx, job.ID, workerID, jobErr); err != nil {
 		jobsProcessed.WithLabelValues(job.Kind, recordErrOutcome(err)).Inc()
 		logRecordErr(log, "fail", err)
 		return
@@ -248,7 +248,6 @@ func sleep(ctx context.Context, d time.Duration) {
 	case <-t.C:
 	}
 }
-
 
 // claimResult labels a claim for the claim-latency histogram.
 func claimResult(job *queue.Job, err error) string {

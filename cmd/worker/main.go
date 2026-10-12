@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net/http"
 	"os"
 	"os/signal"
-	"net/http"
 	"syscall"
 	"time"
 
@@ -17,7 +17,7 @@ import (
 
 	"github.com/SushantPulipati05/taskq/internal/queue"
 	"github.com/SushantPulipati05/taskq/internal/worker"
-		"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const shutdownTimeout = 40 * time.Second
@@ -50,18 +50,18 @@ func main() {
 
 	q := queue.New(pool)
 	workers := worker.NewPool(q, worker.Config{
-		Queue:        "default",
-		Concurrency:  4,
-		Lease:        30 * time.Second,
-		PollInterval: time.Second,
-		ReapInterval: 10 * time.Second,
+		Queue:         "default",
+		Concurrency:   4,
+		Lease:         30 * time.Second,
+		PollInterval:  time.Second,
+		ReapInterval:  10 * time.Second,
 		DepthInterval: 5 * time.Second,
 	}, logger)
 
 	workers.Handle("email", sendEmail)
 	workers.Handle("urgent-email", sendEmail)
 
-		// Serve Prometheus metrics. ":2112" listens on all interfaces so the Prometheus
+	// Serve Prometheus metrics. ":2112" listens on all interfaces so the Prometheus
 	// container can reach it via host.docker.internal.
 	metricsAddr := os.Getenv("METRICS_ADDR")
 	if metricsAddr == "" {
@@ -94,7 +94,7 @@ func main() {
 	stop()
 
 	select {
-		case <-done:
+	case <-done:
 		logger.Info("all workers stopped cleanly")
 
 		// Workers are done; stop the metrics server too (wait up to 5s for any
