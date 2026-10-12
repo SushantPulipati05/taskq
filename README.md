@@ -1,5 +1,7 @@
 # Taskq
 
+![CI](https://github.com/SushantPulipati05/taskq/actions/workflows/ci.yml/badge.svg)
+
 A durable background-job queue in Go, built on PostgreSQL alone, with no Redis, Kafka or RabbitMQ.
 Workers claim jobs with `SELECT ... FOR UPDATE SKIP LOCKED`, hold them under a lease, retry
 with exponential backoff, and are observable through Prometheus metrics.
@@ -94,8 +96,8 @@ Metrics: http://localhost:2112/metrics · Prometheus UI: http://localhost:9090
 
 ## Benchmarks
 
-Measured on <CPU model, N cores, RAM>, Postgres 16 in Docker Desktop (WSL2) on Windows.
-Full query plans are in [docs/benchmarks.md](docs/benchmarks.md).
+Measured on a Windows desktop, with Postgres 16 running in Docker Desktop (WSL2) on the same machine.
+Full query plans and raw results are in [docs/measurements.md](docs/measurements.md).
 
 ### Claim query: why the index is partial
 
@@ -130,16 +132,12 @@ Findings:
 - **Group commit makes concurrency super-linear.** 4 workers were 5.8× faster than 1, because
   concurrent commits share a single disk flush. With `synchronous_commit=off` (nothing to share),
   4 workers gave 3.8×.
-- - **Plateau at ~4,200–4,400 jobs/sec.** Throughput stopped growing past ~48–64 workers
-  (64 → 80 workers: +1%). CPU was at <…>% during these runs, so the limit was <CPU / …>.
+- **Plateau at ~4,200–4,400 jobs/sec.** Throughput stopped growing past ~48–64 workers
+  (64 → 80 workers: +1%). Postgres, the Docker VM and the workers all share one machine, so the
+  ceiling is a property of this setup, not of Taskq alone.
   Benchmarks were warmed up and repeated: a cold first run measured ~40% lower.
 - Taskq keeps durable commits. `synchronous_commit=off` is ~5× faster at low concurrency, but a
   crash can lose recently "committed" job state.
-
-### Latency (Prometheus, fake email handler taking 200–800 ms)
-
-- Job duration: p50 <…> s, p99 <…> s
-- Claim query: p99 <…> ms
 
 ## Metrics
 
@@ -174,7 +172,11 @@ Example: p99 job duration
 - **Unbounded backoff:** 2^attempts is fine at 5 attempts but should be capped and jittered.
 - **No retention:** finished jobs stay in the table forever. They don't slow claims (partial
   index), but the table grows. A periodic cleanup or partitioning by time would fix that.
-- **Tests:** <in progress / list what exists>.
+- **Test coverage is focused on the queue's guarantees:** integration tests against a real
+  Postgres cover concurrent claims (20 workers, 300 jobs, no duplicates), priority ordering, lease
+  fencing, retry/backoff/dead, the reaper, idempotency keys, outbox rollback and graceful
+  shutdown. They run with the race detector in CI on every push. Not yet covered: the metrics,
+  the HTTP server and the demo `orders` code.
 
 For production, use a mature library such as [River](https://riverqueue.com). This project
 exists to understand the problems those libraries solve.
