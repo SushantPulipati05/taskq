@@ -269,3 +269,9 @@ the trade off with sync-off is the durability, in case of a crash, we might lose
 
 
 also keep adding more workers just doesn't keep on reducing the time exponentially, it actually flattens the curve. this is because the bottleneck effect that happens when there is only one place the commits happen, so the worker get keep queued behind one other waiting to process their query to the single db
+
+workers      jobs       seconds      jobs/sec    
+32           20000      7.46         2682        
+48           20000      5.04         3969        
+64           20000      4.73         4224        
+80           20000      4.68         4277        
